@@ -11,9 +11,9 @@ body {
 
 #background {
     position: fixed;
-    inset: -4px; /* overshoot the viewport so the jitter never reveals an edge */
-    z-index: -1; /* behind the page content */
-    pointer-events: none; /* don't block clicks on the drop zone */
+    inset: -4px; 
+    z-index: -1;
+    pointer-events: none;
     background: repeating-radial-gradient(#fff 1px, #000 2px);
     opacity: 0.05;
     animation: noise 0.2s infinite;
