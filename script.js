@@ -1,10 +1,9 @@
 const MAX_BYTES = 1 << 20;
-const SAMPLE = 32;
-const THRESHOLD = 0.9;
+const MIN_RUN = 8;   // flag if at least this many readable bytes appear in a row at the start
 
 const isPrintable = b => (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13;
 
-// Decode the PNG to raw RGBA pixels, with colour conversion and alpha premultiplying
+// Decode PNG to raw RGBA pixels, with colour conversion and alpha premultiplying
 // switched off so the browser doesn't alter the low bits
 async function loadPixels(file) {
     const bmp = await createImageBitmap(file, {
@@ -19,7 +18,7 @@ async function loadPixels(file) {
     return ctx.getImageData(0, 0, bmp.width, bmp.height);
 }
 
-// Pull the lowest bit from the chosen channels, pixel by pixel, and pack into bytes
+// Pull lowest bit from the chosen channels, pixel by pixel, and pack into bytes
 function extract(img, channels, msbFirst) {
     const bytes = [];
     let current = 0, count = 0;
@@ -41,22 +40,11 @@ function extract(img, channels, msbFirst) {
     return Uint8Array.from(bytes);
 }
 
-function printableRatio(buf) {
-    const n = Math.min(buf.length, SAMPLE);
-    if (n === 0) return 0;
-    let ok = 0;
-    for (let i = 0; i < n; i++) if (isPrintable(buf[i])) ok++;
-    return ok / n;
-}
-
-function readableText(buf) {
-    let end = 0, bad = 0;
-    while (end < buf.length && end < 500) {
-        if (buf[end] === 0) break;
-        if (!isPrintable(buf[end]) && ++bad > 3) break;
-        end++;
-    }
-    return new TextDecoder('utf-8', { fatal: false }).decode(buf.subarray(0, end));
+// Length of the leading run of printable bytes
+function printablePrefix(buf) {
+    let n = 0;
+    while (n < buf.length && n < 500 && isPrintable(buf[n])) n++;
+    return n;
 }
 
 function hasAlpha(img) {
@@ -96,11 +84,11 @@ async function scan(file) {
     for (const [name, channels] of Object.entries(channelSets)) {
         for (const msbFirst of [true, false]) {
             const buf = extract(img, channels, msbFirst);
-            const score = printableRatio(buf);
-            if (score >= THRESHOLD) {
+            const run = printablePrefix(buf);
+            if (run >= MIN_RUN) {
                 found = true;
-                add('h3', `Likely message: channels ${name}, ${msbFirst ? 'MSB' : 'LSB'}-first (score ${score.toFixed(2)})`);
-                add('pre', readableText(buf));
+                add('h3', `Likely message: channels ${name}, ${msbFirst ? 'MSB' : 'LSB'}-first (${run} readable bytes)`);
+                add('pre', new TextDecoder('utf-8').decode(buf.subarray(0, run)));
             }
         }
     }
