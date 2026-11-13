@@ -1,0 +1,120 @@
+const MAX_BYTES = 1 << 20;
+const SAMPLE = 32;
+const THRESHOLD = 0.9;
+
+const isPrintable = b => (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13;
+
+// Decode the PNG to raw RGBA pixels, with colour conversion and alpha premultiplying
+// switched off so the browser doesn't alter the low bits
+async function loadPixels(file) {
+    const bmp = await createImageBitmap(file, {
+        colorSpaceConversion: 'none',
+        premultiplyAlpha: 'none'
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0);
+    return ctx.getImageData(0, 0, bmp.width, bmp.height);
+}
+
+// Pull the lowest bit from the chosen channels, pixel by pixel, and pack into bytes
+function extract(img, channels, msbFirst) {
+    const bytes = [];
+    let current = 0, count = 0;
+    const pixelCount = img.width * img.height;
+
+    for (let p = 0; p < pixelCount && bytes.length < MAX_BYTES; p++) {
+        for (const ch of channels) {
+            const bit = img.data[p * 4 + ch] & 1;
+            if (msbFirst) current = (current << 1) | bit;
+            else current |= bit << count;
+
+            if (++count === 8) {
+                bytes.push(current);
+                current = 0;
+                count = 0;
+            }
+        }
+    }
+    return Uint8Array.from(bytes);
+}
+
+function printableRatio(buf) {
+    const n = Math.min(buf.length, SAMPLE);
+    if (n === 0) return 0;
+    let ok = 0;
+    for (let i = 0; i < n; i++) if (isPrintable(buf[i])) ok++;
+    return ok / n;
+}
+
+function readableText(buf) {
+    let end = 0, bad = 0;
+    while (end < buf.length && end < 500) {
+        if (buf[end] === 0) break;
+        if (!isPrintable(buf[end]) && ++bad > 3) break;
+        end++;
+    }
+    return new TextDecoder('utf-8', { fatal: false }).decode(buf.subarray(0, end));
+}
+
+function hasAlpha(img) {
+    for (let i = 3; i < img.data.length; i += 4) if (img.data[i] !== 255) return true;
+    return false;
+}
+
+async function scan(file) {
+    const out = document.getElementById('results');
+    out.textContent = '';
+
+    const add = (tag, text) => {
+        const el = document.createElement(tag);
+        el.textContent = text;       // textContent, so hidden text can't inject HTML
+        out.appendChild(el);
+    };
+
+    let img;
+    try {
+        img = await loadPixels(file);
+    } catch (e) {
+        add('p', 'Could not decode that file as an image.');
+        return;
+    }
+
+    const alpha = hasAlpha(img);
+    add('p', `${file.name}: ${img.width}x${img.height}, transparency used: ${alpha}`);
+
+    // 0=R 1=G 2=B 3=A in canvas pixel data
+    const channelSets = { R: [0], G: [1], B: [2], RGB: [0, 1, 2], BGR: [2, 1, 0] };
+    if (alpha) {
+        channelSets.A = [3];
+        channelSets.RGBA = [0, 1, 2, 3];
+    }
+
+    let found = false;
+    for (const [name, channels] of Object.entries(channelSets)) {
+        for (const msbFirst of [true, false]) {
+            const buf = extract(img, channels, msbFirst);
+            const score = printableRatio(buf);
+            if (score >= THRESHOLD) {
+                found = true;
+                add('h3', `Likely message: channels ${name}, ${msbFirst ? 'MSB' : 'LSB'}-first (score ${score.toFixed(2)})`);
+                add('pre', readableText(buf));
+            }
+        }
+    }
+    if (!found) add('p', 'No readable LSB message found with the tested settings.');
+}
+
+const fileInput = document.getElementById('file');
+const drop = document.getElementById('drop');
+
+fileInput.addEventListener('change', () => fileInput.files[0] && scan(fileInput.files[0]));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('over');
+    if (e.dataTransfer.files[0]) scan(e.dataTransfer.files[0]);
+});
