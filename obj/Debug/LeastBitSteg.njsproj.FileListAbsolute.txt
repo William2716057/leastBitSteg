@@ -1,0 +1,3 @@
+C:\Users\Wills\source\repos\LeastBitSteg\LeastBitSteg\obj\Debug\LeastBitSteg.njsproj.AssemblyReference.cache
+C:\Users\Wills\source\repos\LeastBitSteg\LeastBitSteg\obj\Debug\LeastBitSteg.njsproj.CoreCompileInputs.cache
+C:\Users\Wills\source\repos\LeastBitSteg\LeastBitSteg\bin\Microsoft.NodejsTools.WebRole.dll
