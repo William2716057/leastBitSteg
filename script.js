@@ -1,5 +1,5 @@
 const MAX_BYTES = 1 << 20;
-const MIN_RUN = 8;   // flag if at least this many readable bytes appear in a row at the start
+const MIN_RUN = 8;   // flag if at least this many readable bytes appear in row at the start
 
 const isPrintable = b => (b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13;
 
@@ -66,7 +66,7 @@ async function scan(file) {
     try {
         img = await loadPixels(file);
     } catch (e) {
-        add('p', 'Could not decode that file as an image.');
+        add('p', 'Could not decode file as image.');
         return;
     }
 
@@ -92,7 +92,7 @@ async function scan(file) {
             }
         }
     }
-    if (!found) add('p', 'No readable LSB message found with the tested settings.');
+    if (!found) add('p', 'No readable LSB message found with tested settings.');
 }
 
 const fileInput = document.getElementById('file');
